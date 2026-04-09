@@ -199,7 +199,6 @@ rescaled_factor = {
     125: 2.2366760448475045,
 }
 
-
 def lookup_rescaled_density(rescaled_density: dict, ts: int):
     """Exact timestep key if present; else nearest key (scheduler timesteps may not match calibration keys)."""
     if ts in rescaled_density:

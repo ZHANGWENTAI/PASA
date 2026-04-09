@@ -8,7 +8,7 @@ first_layers_fp=0.03
 base_density=0.15
 pattern="PASA"
 
-output_dir="result/wan/t2v/pasa"
+output_dir="result/wan1.3B/t2v/pasa"
 
 # Video Cfg
 video_cfg="Step_${infer_step}-Res_${resolution}"

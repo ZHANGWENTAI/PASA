@@ -131,3 +131,4 @@ def visualize_sparse_bsr(row_ptr, col_idx, block_size, grid_size=(20, 20)):
         vis += "\n"
 
     return vis
+

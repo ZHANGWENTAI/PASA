@@ -127,64 +127,6 @@ def get_factor(num_frames: int, num_tokens_per_frame: int) -> int:
     raise ValueError(f"No factor found for {num_frames} * {num_tokens_per_frame}")
 
 
-def gen_temporal_mask(
-    num_frames: int,
-    num_tokens_per_frame: int,
-    multiplier: float,
-) -> Tuple[torch.Tensor, torch.Tensor, Tuple[int, int]]:
-    """
-    Generate temporal mask for temporal attention head (reordered sliding window).
-    Will be used for flashinfer sparse attention.
-
-    abs(q_idx - kv_idx) < multiplier * num_tokens_per_frame
-
-    Args:
-        multiplier (int): width of sliding window
-
-    Returns:
-        Tuple[torch.Tensor, torch.Tensor, Tuple[int, int]]: Attention mask (row, column) in BSR format and block size
-    """
-    # TODO: Autosearch row_block_size and column_block_size
-    row_block_size = column_block_size = get_factor(num_frames, num_tokens_per_frame)
-
-    assert (num_tokens_per_frame * num_frames) % row_block_size == 0 and (
-        num_tokens_per_frame * num_frames
-    ) % column_block_size == 0
-    num_row_blocks = num_col_blocks = num_frames * num_tokens_per_frame // row_block_size
-
-    attn_mask = np.full((num_row_blocks, num_col_blocks), -1)
-    host_row_indices = np.zeros(num_row_blocks + 1, dtype=np.int32)
-
-    for i in range(num_row_blocks):
-        for j in range(num_col_blocks):
-            row_token_idx = i * row_block_size + row_block_size // 2
-            col_token_idx = j * column_block_size + column_block_size // 2
-
-            # Diagonal region
-            if abs(row_token_idx - col_token_idx) < multiplier * num_tokens_per_frame:
-                attn_mask[i, j] = j
-                host_row_indices[i + 1] += 1
-            # First frame region
-            elif col_token_idx <= num_tokens_per_frame:
-                attn_mask[i, j] = j
-                host_row_indices[i + 1] += 1
-
-    host_row_indices = np.cumsum(host_row_indices)
-    host_column_indices = attn_mask[attn_mask != -1]
-
-    sparsity = len(host_column_indices) / (num_row_blocks * num_col_blocks)
-    logger.info(
-        f"Flashinfer temporal sparsity: {sparsity * 100:.2f}% | Block size: {row_block_size}x{column_block_size}"
-    )
-
-    row_indices = torch.from_numpy(host_row_indices).to(torch.int32).cuda()
-    # This padding is to avoid irregular memory access in flashinfer kernel
-    host_column_indices = np.concatenate((host_column_indices, [0] * 256))
-    column_indices = torch.from_numpy(host_column_indices).to(torch.int32).cuda()
-
-    return row_indices, column_indices, (row_block_size, column_block_size)
-
-
 def flashinfer_sparse_attn_forward(
     q: torch.Tensor,
     k: torch.Tensor,
@@ -236,3 +178,46 @@ def flashinfer_sparse_attn_forward(
     o_image = o_image.reshape(seq_len, cfg, num_heads, head_dim).permute(1, 2, 0, 3).contiguous()
 
     return o_image
+
+rescaled_factors = {
+    952: 0.9751290602409638,
+    946: 0.9700656385542168,
+    940: 0.9650698795180721,
+    934: 0.9601417831325302,
+    927: 0.9544778554216867,
+    920: 0.9489060240963856,
+    913: 0.9434262891566265,
+    906: 0.9380386506024097,
+    898: 0.9319941204819276,
+    890: 0.9260698795180723,
+    882: 0.9202659277108434,
+    873: 0.913880265060241,
+    863: 0.9069636385542168,
+    854: 0.9008993734939759,
+    843: 0.8936942409638554,
+    833: 0.887341469879518,
+    821: 0.8799662409638555,
+    809: 0.8728616626506024,
+    796: 0.8654704578313253,
+    783: 0.8583968915662651,
+    768: 0.85062978313253,
+    753: 0.8432855662650602,
+    737: 0.8359178554216867,
+    720: 0.8286168674698794,
+    701: 0.821099734939759,
+    681: 0.8139199759036144,
+    660: 0.8071903614457832,
+    636: 0.800514313253012,
+    611: 0.7947113012048193,
+    584: 0.789763469879518,
+    555: 0.7859753012048193,
+    522: 0.7835873734939759,
+    487: 0.7832913493975904,
+    448: 0.7856736385542169,
+    405: 0.7916138554216866,
+    356: 0.8026193734939759,
+    302: 0.819974843373494,
+    241: 2.2507440386715194,
+    172: 2.7757292234192645,
+    92: 3.0025936743632604,
+}

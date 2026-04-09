@@ -1,27 +1,30 @@
-resolution="480p"
+
+resolution="720p"
 infer_step=50
 
-first_times_fp=1
-first_layers_fp=1
+first_times_fp=0.2
+first_layers_fp=0.03
 
-pattern="SAP"
+base_density=0.15
+pattern="PASA"
 
-output_dir="result/wan1.3B/t2v/dense"
+output_dir="result/wan14B/t2v/pasa"
 
 # Video Cfg
 video_cfg="Step_${infer_step}-Res_${resolution}"
 
 # Dense Attention Cfg
-dense_attention_cfg="TFP_${first_times_fp}-LFP_${first_layers_fp}"
+dense_attention_cfg="TFP_${first_times_fp}-LFP_${first_layers_fp}-BaseDensity_${base_density}"
 
 # Output feature
 output_feature="${video_cfg}/${dense_attention_cfg}"
 
-for i in {1..10}; do
+
+for i in {1..9}; do
     prompt=$(cat examples/${i}/prompt.txt)
     export WAN_HIDDEN_L1_PROMPT_ID=${i}
     python wan_t2v_inference.py \
-        --model_id "Wan-AI/Wan2.1-T2V-1.3B-Diffusers" \
+        --model_id "Wan-AI/Wan2.1-T2V-14B-Diffusers" \
         --prompt "${prompt}" \
         --height 512 \
         --width 768 \
@@ -30,6 +33,7 @@ for i in {1..10}; do
         --pattern $pattern \
         --first_times_fp $first_times_fp \
         --first_layers_fp $first_layers_fp \
-        --output_file "${output_dir}/${output_feature}/${i}-DENSE.mp4" \
-        --logging_file "${output_dir}/${output_feature}/${i}-DENSE.jsonl"
+        --base_density $base_density \
+        --output_file "${output_dir}/${output_feature}/${i}-PASA.mp4" \
+        --logging_file "${output_dir}/${output_feature}/${i}-PASA.jsonl"
 done

@@ -40,39 +40,12 @@ if __name__ == "__main__":
         "--pattern",
         type=str,
         default="dense",
-        choices=["SVG", "dense", "SAP", "SAP_SR", "SAP_AdaKmeans", "PISA", "PURE_PISA", "MIX_PISA", "GROUP_PISA"],
+        choices=["dense", "PASA"],
     )
     parser.add_argument("--first_layers_fp", type=float, default=0.025, help="Only works for best config. Leave the 0, 1, 2, 40, 41 layers in FP")
     parser.add_argument("--first_times_fp", type=float, default=0.075, help="Only works for best config. Leave the first 10% timestep in FP")
-    
-    # SVG related
-    parser.add_argument("--num_sampled_rows", type=int, default=64, help="The number of sampled rows")
-    parser.add_argument("--sample_mse_max_row", type=int, default=10000, help="The maximum number of rows in attention mask. Prevent OOM.")
-    parser.add_argument("--sparsity", type=float, default=0.25, help="The sparsity of the striped attention pattern. Accepts one or two float values.")
 
-    # SAP related
-    parser.add_argument("--num_q_centroids", "--qc", type=int, default=50, help="Number of query centroids for KMEANS_BLOCK.")
-    parser.add_argument("--num_k_centroids", "--kc", type=int, default=200, help="Number of key centroids for KMEANS_BLOCK.")
-    parser.add_argument("--top_p_kmeans", type=float, default=0.9, help="Top-p threshold for block selection in KMEANS_BLOCK.")
-    parser.add_argument("--r_kmeans", type=float, default=0.05, help="R threshold for block selection in KMEANS_BLOCK for SR attention.")
-    parser.add_argument("--min_kc_ratio", type=float, default=0, help="At least this proportion of key blocks to keep per query block in KMEANS_BLOCK.")
-    parser.add_argument("--q_kmeans_iter_init", type=int, default=0, help="Number of KMeans iterations for query initialization in KMEANS_BLOCK.")
-    parser.add_argument("--k_kmeans_iter_init", type=int, default=0, help="Number of KMeans iterations for key initialization in KMEANS_BLOCK.")
-    parser.add_argument("--q_kmeans_iter_step", type=int, default=0, help="Number of KMeans iterations for query in other diffusion steps in KMEANS_BLOCK.")
-    parser.add_argument("--k_kmeans_iter_step", type=int, default=0, help="Number of KMeans iterations for key in other diffusion steps in KMEANS_BLOCK.")
-    parser.add_argument("--q_kmeans_init_method", type=str, default="random", choices=["random", "uniform", "cache"], help="Initialization method for query KMeans centroids.")
-    parser.add_argument("--k_kmeans_init_method", type=str, default="random", choices=["random", "uniform"], help="Initialization method for key KMeans centroids.")
-    parser.add_argument("--kmeans_step_type", type=str, default="full", choices=["full", "key_only"], help="KMeans step: 'full' (Q+K) or 'key_only' (only K further clustering).")
-    parser.add_argument("--window_size", type=int, default=2, help="SAP_AdaKmeans: window size for first N steps (sequence downsampling).")
-    # Backward compatibility: if old args are provided, use them for both q and k
-    parser.add_argument("--kmeans_iter_init", type=int, default=None, help="[Deprecated] Use --q_kmeans_iter_init and --k_kmeans_iter_init instead.")
-    parser.add_argument("--kmeans_iter_step", type=int, default=None, help="[Deprecated] Use --q_kmeans_iter_step and --k_kmeans_iter_step instead.")
-
-    # X_Kmeans_SAP related
-    parser.add_argument("--num_x_centroids", type=int, default=1200, help="Number of x centroids for X_Kmeans_SAP.")
-
-    # GROUP_PISA related
-    parser.add_argument("--density", type=float, default=0.15, help="Density for GROUP_PISA.")
+    parser.add_argument("--base_density", type=float, default=0.15, help="Base density for GROUP_PISA.")
 
     args = parser.parse_args()
 
@@ -136,140 +109,13 @@ if __name__ == "__main__":
     #########################################################
     # Replace the attention & time logger
     #########################################################
-    if args.pattern == "SVG":
-        replace_wan_attention(
-            pipe, 
-            args.height, 
-            args.width, 
-            args.num_frames,
-            first_layers_fp=args.first_layers_fp,
-            first_times_fp=args.first_times_fp,
-            pattern=args.pattern,
-            # SVG specific
-            num_sampled_rows=args.num_sampled_rows,
-            sample_mse_max_row=args.sample_mse_max_row,
-            sparsity=args.sparsity,
-            stability_analysis_dir=args.stability_analysis_dir,
-        )
-    elif args.pattern == "SAP" or args.pattern == "SAP_SR":
+    if args.pattern == "PASA":
         replace_wan_attention(
             pipe,
             args.height,
             args.width,
             args.num_frames,
-            first_layers_fp=args.first_layers_fp,
-            first_times_fp=args.first_times_fp,
-            pattern=args.pattern,
-            # SAP specific
-            num_q_centroids=args.num_q_centroids,
-            num_k_centroids=args.num_k_centroids,
-            top_p_kmeans=args.top_p_kmeans,
-            r_kmeans=args.r_kmeans,
-            min_kc_ratio=args.min_kc_ratio,
-            logging_file=args.logging_file,
-            q_kmeans_iter_init=args.q_kmeans_iter_init if args.kmeans_iter_init is None else args.kmeans_iter_init,
-            k_kmeans_iter_init=args.k_kmeans_iter_init if args.kmeans_iter_init is None else args.kmeans_iter_init,
-            q_kmeans_iter_step=args.q_kmeans_iter_step if args.kmeans_iter_step is None else args.kmeans_iter_step,
-            k_kmeans_iter_step=args.k_kmeans_iter_step if args.kmeans_iter_step is None else args.kmeans_iter_step,
-            q_kmeans_init_method=args.q_kmeans_init_method,
-            k_kmeans_init_method=args.k_kmeans_init_method,
-            kmeans_step_type=args.kmeans_step_type,
-            stability_analysis_dir=args.stability_analysis_dir,
-        )
-    elif args.pattern == "SAP_AdaKmeans":
-        replace_wan_attention(
-            pipe,
-            args.height,
-            args.width,
-            args.num_frames,
-            first_layers_fp=args.first_layers_fp,
-            first_times_fp=args.first_times_fp,
-            pattern=args.pattern,
-            num_q_centroids=args.num_q_centroids,
-            num_k_centroids=args.num_k_centroids,
-            top_p_kmeans=args.top_p_kmeans,
-            min_kc_ratio=args.min_kc_ratio,
-            logging_file=args.logging_file,
-            q_kmeans_iter_init=args.q_kmeans_iter_init if args.kmeans_iter_init is None else args.kmeans_iter_init,
-            k_kmeans_iter_init=args.k_kmeans_iter_init if args.kmeans_iter_init is None else args.kmeans_iter_init,
-            q_kmeans_iter_step=args.q_kmeans_iter_step if args.kmeans_iter_step is None else args.kmeans_iter_step,
-            k_kmeans_iter_step=args.k_kmeans_iter_step if args.kmeans_iter_step is None else args.kmeans_iter_step,
-            q_kmeans_init_method=args.q_kmeans_init_method,
-            k_kmeans_init_method=args.k_kmeans_init_method,
-            kmeans_step_type=args.kmeans_step_type,
-            window_size=args.window_size,
-            stability_analysis_dir=args.stability_analysis_dir,
-        )
-    elif args.pattern == "X_Kmeans_SAP":
-        replace_wan_attention(
-            pipe,
-            args.height,
-            args.width,
-            args.num_frames,
-            first_layers_fp=args.first_layers_fp,
-            first_times_fp=args.first_times_fp,
-            pattern=args.pattern,
-            # X_Kmeans_SAP specific
-            num_x_centroids=args.num_x_centroids,
-            top_p_kmeans=args.top_p_kmeans,
-            min_kc_ratio=args.min_kc_ratio,
-            logging_file=args.logging_file,
-            x_kmeans_iter_init=args.kmeans_iter_init,
-            x_kmeans_iter_step=args.kmeans_iter_step,
-            stability_analysis_dir=args.stability_analysis_dir,
-        )
-    elif args.pattern == "PISA":
-        replace_wan_attention(
-            pipe,
-            args.height,
-            args.width,
-            args.num_frames,
-            first_layers_fp=args.first_layers_fp,
-            first_times_fp=args.first_times_fp,
-            pattern=args.pattern,
-            num_q_centroids=args.num_q_centroids,
-            num_k_centroids=args.num_k_centroids,
-            logging_file=args.logging_file,
-            q_kmeans_iter_init=args.q_kmeans_iter_init if args.kmeans_iter_init is None else args.kmeans_iter_init,
-            k_kmeans_iter_init=args.k_kmeans_iter_init if args.kmeans_iter_init is None else args.kmeans_iter_init,
-            q_kmeans_iter_step=args.q_kmeans_iter_step if args.kmeans_iter_step is None else args.kmeans_iter_step,
-            k_kmeans_iter_step=args.k_kmeans_iter_step if args.kmeans_iter_step is None else args.kmeans_iter_step,
-            q_kmeans_init_method=args.q_kmeans_init_method,
-            k_kmeans_init_method=args.k_kmeans_init_method,
-            zero_step_kmeans_init=getattr(args, "zero_step_kmeans_init", False),
-            stability_analysis_dir=args.stability_analysis_dir,
-        )
-    elif args.pattern == "PURE_PISA":
-        replace_wan_attention(
-            pipe,
-            args.height,
-            args.width,
-            args.num_frames,
-            first_layers_fp=args.first_layers_fp,
-            first_times_fp=args.first_times_fp,
-            pattern=args.pattern,
-            logging_file=args.logging_file,
-            stability_analysis_dir=args.stability_analysis_dir,
-        )
-    elif args.pattern == "MIX_PISA":
-        replace_wan_attention(
-            pipe,
-            args.height,
-            args.width,
-            args.num_frames,
-            first_layers_fp=args.first_layers_fp,
-            first_times_fp=args.first_times_fp,
-            pattern=args.pattern,
-            logging_file=args.logging_file,
-            stability_analysis_dir=args.stability_analysis_dir,
-        )
-    elif args.pattern == "GROUP_PISA":
-        replace_wan_attention(
-            pipe,
-            args.height,
-            args.width,
-            args.num_frames,
-            density=args.density,
+            base_density=args.base_density,
             first_layers_fp=args.first_layers_fp,
             first_times_fp=args.first_times_fp,
             pattern=args.pattern,
